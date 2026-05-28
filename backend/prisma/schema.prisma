@@ -1,0 +1,76 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String  @id @default(uuid())
+  email     String? @unique
+  name      String
+  phone     String? @unique
+  avatar    String?
+
+  // Relations
+  messagesSent            Message[]                @relation("MessagesSent")
+  messagesReceived        Message[]                @relation("MessagesReceived")
+  notificationPreferences NotificationPreferences?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ── Notification Preferences ─────────────────────────────────────────────────
+model NotificationPreferences {
+  id                   String  @id @default(uuid())
+  userId               String  @unique
+  notificationsEnabled Boolean @default(true)
+  desktopNotifications Boolean @default(true)
+  soundEnabled         Boolean @default(true)
+  previewEnabled       Boolean @default(true)
+  muted                Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+model Message {
+  id      String        @id @default(uuid())
+  content String
+  status  MessageStatus @default(SENT)
+
+  senderId   String
+  receiverId String
+  chatId     String
+
+  // Relations
+  sender   User @relation("MessagesSent", fields: [senderId], references: [id])
+  receiver User @relation("MessagesReceived", fields: [receiverId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([chatId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("messages")
+}
