@@ -21,7 +21,9 @@ import logger from "../utils/logger";
 const getMe = asyncHandler(async (req: Request, res: Response) => {
   logger.info(`[API] GET /auth/me - Fetching profile for current session`);
 
-  const token = req.cookies.accessToken;
+  const token =
+    req.cookies?.accessToken ||
+    req.header("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
     logger.warn(`[API] GET /auth/me - Failed: No accessToken cookie found`);

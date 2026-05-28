@@ -137,7 +137,7 @@ export const initializeSocket = (httpsServer: HttpServer) => {
           timestamp,
           status: "SENT",
         };
-        
+
         io.to(data.receiverId).emit("receive_message", fastPayload);
 
         // ── 3. BACKGROUND TASKS: Heavy DB & Kafka Operations ──
