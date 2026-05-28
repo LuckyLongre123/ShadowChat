@@ -1,14 +1,14 @@
 'use client';
 
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 import useAppStore from '@/store';
 import { Download, MessageSquare } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePWAInstall } from '@/hooks/usePWAInstall';
+import ContactInfoSidebar from '../ContactInfoSidebar';
 import ChatHeader from './ChatHeader';
 import ChatInput from './ChatInput';
 import ChatSearchSidebar from './ChatSearchSidebar';
 import MessageList from './MessageList';
-import ContactInfoSidebar from '../ContactInfoSidebar';
 
 export default function ChatArea() {
   const activeChatId = useAppStore((s) => s.activeChatId);
@@ -108,7 +108,7 @@ export default function ChatArea() {
               onClick={installApp}
               className="flex items-center gap-2 rounded-full bg-green-50 px-5 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 active:bg-green-200"
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-4 w-4 text-red-800" />
               Install App
             </button>
           </div>
@@ -149,42 +149,43 @@ export default function ChatArea() {
           isSearchOpen={isSearchOpen}
         />
 
-      {/*
-       * Horizontal split row:
-       *   MessageList  | ChatSearchSidebar (when open)
-       *
-       * overflow-hidden on the row is mandatory — it clips the sidebar
-       * slide-in animation without breaking the vertical flex chain above.
-       */}
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <MessageList messages={activeChat.messages} onSearchToggle={toggleSearch} />
-
         {/*
-         * Sidebar is ALWAYS mounted so the CSS width transition actually plays.
-         * Width toggles between 0 (collapsed) and 380px (open) on desktop,
-         * and between 0 and 100% on mobile.
-         * overflow-hidden on this wrapper clips content when collapsed.
-         * The inner <aside> has min-w-[380px] so content never compresses
-         * during the tween — it simply slides in/out of the clipping rect.
+         * Horizontal split row:
+         *   MessageList  | ChatSearchSidebar (when open)
+         *
+         * overflow-hidden on the row is mandatory — it clips the sidebar
+         * slide-in animation without breaking the vertical flex chain above.
          */}
-        <div
-          className={[
-            'overflow-hidden transition-all duration-300 ease-in-out',
-            // Desktop: fixed 380px column; Mobile: full-width overlay
-            isSearchOpen
-              ? 'w-full md:w-[380px]'
-              : 'w-0',
-          ].join(' ')}
-        >
-          <ChatSearchSidebar
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          <MessageList
             messages={activeChat.messages}
-            participantName={activeChat.participant.name}
-            currentUserId={user?.id}
-            onClose={closeSearch}
-            onResultClick={handleResultClick}
+            onSearchToggle={toggleSearch}
           />
+
+          {/*
+           * Sidebar is ALWAYS mounted so the CSS width transition actually plays.
+           * Width toggles between 0 (collapsed) and 380px (open) on desktop,
+           * and between 0 and 100% on mobile.
+           * overflow-hidden on this wrapper clips content when collapsed.
+           * The inner <aside> has min-w-[380px] so content never compresses
+           * during the tween — it simply slides in/out of the clipping rect.
+           */}
+          <div
+            className={[
+              'overflow-hidden transition-all duration-300 ease-in-out',
+              // Desktop: fixed 380px column; Mobile: full-width overlay
+              isSearchOpen ? 'w-full md:w-[380px]' : 'w-0',
+            ].join(' ')}
+          >
+            <ChatSearchSidebar
+              messages={activeChat.messages}
+              participantName={activeChat.participant.name}
+              currentUserId={user?.id}
+              onClose={closeSearch}
+              onResultClick={handleResultClick}
+            />
+          </div>
         </div>
-      </div>
 
         {/* Bottom input bar — always shrink-0 */}
         <ChatInput chatId={activeChat.id} />
@@ -193,11 +194,11 @@ export default function ChatArea() {
       {/* Right Sidebar: Contact Info */}
       <div
         className={[
-          'overflow-hidden transition-all duration-300 ease-in-out shrink-0',
+          'shrink-0 overflow-hidden transition-all duration-300 ease-in-out',
           isContactInfoOpen ? 'w-[400px]' : 'w-0',
         ].join(' ')}
       >
-        <ContactInfoSidebar 
+        <ContactInfoSidebar
           onSearchClick={() => {
             setIsSearchOpen(true);
             closeContactInfo();
