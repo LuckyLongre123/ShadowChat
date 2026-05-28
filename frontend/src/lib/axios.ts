@@ -14,19 +14,33 @@ export const api = axios.create({
   },
 });
 
-api.interceptors.response.use(
-  (response) => {
+api.interceptors.request.use(
+  (config) => {
     const token = localStorage.getItem('accessToken');
     if (token) {
-      response.headers.Authorization = `Bearer ${token}`;
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return response;
+    return config;
   },
   (error) => {
     if (error.response && error.response.status === 401) {
       console.warn('Unauthorized! Redirecting to login...');
       // 2. Client-side safe redirect (Bypass Next.js router crash)
       if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+api.interceptors.response.use(
+  (response) => response, // Standard success pass
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      console.warn('Unauthorized! Redirecting to login...');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken');
         window.location.href = '/';
       }
     }

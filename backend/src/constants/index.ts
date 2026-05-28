@@ -20,7 +20,6 @@ export const corsOptions: CorsOptions = {
 export const cookieOptions = {
   httpOnly: true,
   secure: true,
-  domain: process.env.NODE_ENV === "production" ? ".vercel.app" : "localhost",
   sameSite:
     process.env.NODE_ENV === "production"
       ? ("none" as const)
