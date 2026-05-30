@@ -174,7 +174,7 @@ export default function ChatArea() {
             className={[
               'overflow-hidden transition-all duration-300 ease-in-out',
               // Desktop: fixed 380px column; Mobile: full-width overlay
-              isSearchOpen ? 'w-full md:w-[380px]' : 'w-0',
+              isSearchOpen ? 'w-full md:w-95' : 'w-0',
             ].join(' ')}
           >
             <ChatSearchSidebar
@@ -195,7 +195,7 @@ export default function ChatArea() {
       <div
         className={[
           'shrink-0 overflow-hidden transition-all duration-300 ease-in-out',
-          isContactInfoOpen ? 'w-[400px]' : 'w-0',
+          isContactInfoOpen ? 'w-100' : 'w-0',
         ].join(' ')}
       >
         <ContactInfoSidebar

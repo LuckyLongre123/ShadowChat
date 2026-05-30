@@ -1,13 +1,7 @@
 import axios from 'axios';
 
-const rawBackendURI =
-  process.env.NEXT_PUBLIC_BACKEND_URI || 'http://localhost:5000';
-const cleanBackendURI = rawBackendURI
-  .replace(/^"(.*)"$/, '$1')
-  .replace(/\/$/, '');
-
 export const api = axios.create({
-  baseURL: `${cleanBackendURI}/api/v1`,
+  baseURL: 'https://shadowchat-backend-e9yu.onrender.com/api/v1',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
