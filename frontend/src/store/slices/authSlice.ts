@@ -35,6 +35,10 @@ const createAuthSlice: StateCreator<StoreType, [], [], AuthSlice> = (
   logout: async () => {
     try {
       set({ isLoading: true });
+
+      if (typeof window !== 'undefined') localStorage.removeItem('accessToken');
+      Cookies.remove('accessToken', { path: '/' });
+
       await api.post('/auth/logout');
       window.location.href = '/';
     } catch (error: unknown) {
