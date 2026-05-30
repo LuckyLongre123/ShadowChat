@@ -1,74 +1,129 @@
 import { api } from '@/lib/axios';
+import Cookies from 'js-cookie';
+import toast from 'react-hot-toast';
 import { StateCreator } from 'zustand';
+import { StoreType } from '..';
 
-export interface AuthUser {
+export interface User {
   id: string;
-  name: string;
-  email: string;
-  avatar?: string;
+  email?: string;
   phone?: string;
+  name: string;
+  avatar?: string;
 }
 
 export interface AuthSlice {
-  authUser: AuthUser | null;
-  isAuthLoading: boolean;
-  setAuthUser: (user: AuthUser | null) => void;
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  setLoading: (status: boolean) => void;
+  setAuthUser: (user: User) => void;
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
-  logout: () => void;
 }
 
-export const createAuthSlice: StateCreator<AuthSlice> = (set) => ({
-  authUser: null,
-  isAuthLoading: true, // ✅ Start as TRUE — prevents flash of login page on reload
+// ✅ Helper — keeps cookie logic in one place
+function clearSessionCookie() {
+  Cookies.remove('accessToken', { path: '/' });
+  // If you added the auth-session-flag from the middleware fix:
+  Cookies.remove('auth-session-flag', { path: '/' });
+}
 
-  setAuthUser: (user) => set({ authUser: user }),
+const createAuthSlice: StateCreator<StoreType, [], [], AuthSlice> = (set) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true, // ✅ Start TRUE — prevents flash of login page on app load
+
+  setAuthUser: (user) => set({ user, isAuthenticated: true, isLoading: false }),
+
+  setLoading: (status) => set({ isLoading: status }),
+
+  logout: async () => {
+    // ✅ Clear local state immediately — don't wait for the network
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('accessToken');
+    }
+    clearSessionCookie();
+    set({ user: null, isAuthenticated: false, isLoading: false });
+
+    try {
+      // Fire-and-forget — we don't need the response
+      // The user is already logged out locally regardless of server outcome
+      await api.post('/auth/logout');
+    } catch (error: unknown) {
+      const isNetworkError =
+        typeof error === 'object' && error !== null && !('response' in error);
+
+      if (isNetworkError) {
+        // ✅ Server unreachable — still fully logged out locally
+        window.location.href = '/server-down';
+        return;
+      }
+      // Any other error (4xx, 5xx) — still logged out, just redirect home
+      console.error('Backend logout call failed:', error);
+    }
+
+    window.location.href = '/';
+  },
 
   checkAuth: async () => {
-    // ✅ If no token exists at all, fail fast — don't even hit the network
+    // ✅ Fast-exit: if there's no token, don't even hit the network
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('accessToken');
       if (!token) {
-        set({ authUser: null, isAuthLoading: false });
+        set({ user: null, isAuthenticated: false, isLoading: false });
         return;
       }
     }
 
     try {
-      const res = await api.get('/auth/me');
-      const user = res.data?.data?.user ?? res.data?.data ?? null;
-      set({ authUser: user, isAuthLoading: false });
+      set({ isLoading: true });
+      const response = await api.get('/auth/me');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      // ✅ ONLY clear token on explicit 401 (invalid/expired token)
-      // Do NOT clear on network errors (500, timeout) — that would log out users on Render cold starts
-      if (error?.response?.status === 401) {
-        localStorage.removeItem('accessToken');
-        // ✅ Clear the session flag cookie too
-        document.cookie =
-          'auth-session-flag=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        set({ authUser: null, isAuthLoading: false });
+      if (response.data?.success) {
+        const userData = response.data.data?.user ?? response.data.data;
+        set({ user: userData, isAuthenticated: true, isLoading: false });
+        // ✅ NO window.location here — routing is handled by ChatLayout
       } else {
-        // Network error / server error — keep the user "logged in" optimistically
-        // The Axios interceptor will handle true 401s
-        console.warn(
-          '[checkAuth] Non-401 error, preserving session:',
-          error?.message
-        );
-        set({ isAuthLoading: false });
-        // Don't touch authUser — leave it as null but don't wipe a valid token
+        // Unexpected non-success with a 2xx — treat as logged out
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('accessToken');
+        }
+        clearSessionCookie();
+        set({ user: null, isAuthenticated: false, isLoading: false });
+      }
+    } catch (error: unknown) {
+      const isNetworkError =
+        typeof error === 'object' && error !== null && !('response' in error);
+
+      if (isNetworkError) {
+        // ✅ Server unreachable (Render cold start, etc.)
+        // Don't delete the token — it may still be valid when server wakes
+        toast.error('Server is currently unreachable. Please try again later.');
+        set({ isLoading: false });
+        window.location.href = '/server-down';
+        return;
+      }
+
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+
+      if (status === 401) {
+        // ✅ Explicitly invalid/expired token — clear everything
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('accessToken');
+        }
+        clearSessionCookie();
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        // ✅ Don't call logout() — that fires POST /auth/logout unnecessarily
+        // The Axios interceptor will redirect to '/' for you
+      } else {
+        // 500, 503, unexpected — preserve token, just stop loading
+        console.error('[checkAuth] Non-auth error, preserving session:', error);
+        set({ isLoading: false });
       }
     }
   },
-
-  logout: () => {
-    localStorage.removeItem('accessToken');
-    // ✅ Clear the session flag cookie
-    if (typeof window !== 'undefined') {
-      document.cookie =
-        'auth-session-flag=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    }
-    set({ authUser: null, isAuthLoading: false });
-    window.location.href = '/';
-  },
 });
+
+export default createAuthSlice;
