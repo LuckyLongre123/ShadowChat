@@ -26,6 +26,7 @@ export default function GoogleLoginButton() {
 
       if (res.data?.success) {
         setAuthUser(res.data.data.user);
+        localStorage.setItem('accessToken', res.data?.data?.token);
         router.push('/chat');
       } else
         throw new Error(res?.data?.message || 'Server authentication failed.');
