@@ -5,7 +5,6 @@ import { auth, googleProvider } from '@/lib/firebase';
 import useAppStore from '@/store';
 import { signInWithPopup } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -13,7 +12,7 @@ export default function GoogleLoginButton() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const setAuthUser = useAppStore((state) => state.setAuthUser);
 
-  const router = useRouter();
+  // 🌟 Removed useRouter() kyunki window.location SPA bugs ko bypass kar dega
 
   const handleGoogleLogin = async () => {
     try {
@@ -25,17 +24,30 @@ export default function GoogleLoginButton() {
       const res = await api.post('/auth/google', { idToken });
 
       if (res.data?.success) {
-        setAuthUser(res.data.data.user);
-        localStorage.setItem('accessToken', res.data?.data?.token);
-        router.push('/chat');
-      } else
+        const token = res.data.data.token || res.data.token; // Backup safe extraction
+        const user = res.data.data.user || res.data.data;
+
+        if (token) {
+          // 1. Storage me turant set karo
+          localStorage.setItem('accessToken', token);
+
+          // 2. Zustand state update karo
+          setAuthUser(user);
+
+          // 3. HARD REDIRECT - Ye Axios aur App State dono ko nayi memory ke sath start karega!
+          window.location.href = '/chat';
+          return;
+        } else {
+          throw new Error('Token missing from server response');
+        }
+      } else {
         throw new Error(res?.data?.message || 'Server authentication failed.');
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Google Login Error Details:', error);
 
-      // 4. SPECIFIC ERROR HANDLING (Firebase & Backend Errors)
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Login cancelled: Popup was closed.');
       } else if (error.code === 'auth/cancelled-popup-request') {
