@@ -24,12 +24,18 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      console.warn('Unauthorized! Redirecting to login...');
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('accessToken');
-        window.location.href = '/';
-      }
+    // ✅ ONLY redirect on 401 — not on 500, network errors, or timeouts
+    // Also guard against redirect loops: don't redirect if already on '/'
+    if (
+      error.response?.status === 401 &&
+      typeof window !== 'undefined' &&
+      window.location.pathname !== '/'
+    ) {
+      console.warn('[Axios] 401 received — clearing session and redirecting');
+      localStorage.removeItem('accessToken');
+      document.cookie =
+        'auth-session-flag=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }

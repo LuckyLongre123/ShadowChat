@@ -8,59 +8,68 @@ import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
+// ✅ Helper to set the lightweight session flag cookie for middleware
+function setSessionCookie() {
+  // Not httpOnly (set from JS), expires in 7 days, works cross-path
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `auth-session-flag=true; path=/; expires=${expires}; SameSite=Lax`;
+}
+
 export default function GoogleLoginButton() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const setAuthUser = useAppStore((state) => state.setAuthUser);
 
-  // 🌟 Removed useRouter() kyunki window.location SPA bugs ko bypass kar dega
-
   const handleGoogleLogin = async () => {
     try {
       setIsAuthenticating(true);
-      const result = await signInWithPopup(auth, googleProvider);
 
+      // Step 1: Firebase popup
+      const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();
 
+      // Step 2: Exchange with your backend
       const res = await api.post('/auth/google', { idToken });
 
-      if (res.data?.success) {
-        const token = res.data.data.token || res.data.token; // Backup safe extraction
-        const user = res.data.data.user || res.data.data;
-
-        if (token) {
-          // 1. Storage me turant set karo
-          localStorage.setItem('accessToken', token);
-
-          // 2. Zustand state update karo
-          setAuthUser(user);
-
-          // 3. HARD REDIRECT - Ye Axios aur App State dono ko nayi memory ke sath start karega!
-          window.location.href = '/chat';
-          return;
-        } else {
-          throw new Error('Token missing from server response');
-        }
-      } else {
+      if (!res.data?.success) {
         throw new Error(res?.data?.message || 'Server authentication failed.');
       }
 
+      // Step 3: Safe token + user extraction
+      const token = res.data.data?.token ?? res.data.token;
+      const user = res.data.data?.user ?? res.data.data;
+
+      if (!token) {
+        throw new Error('Token missing from server response');
+      }
+
+      // Step 4: Persist token to localStorage (for Axios interceptor)
+      localStorage.setItem('accessToken', token);
+
+      // ✅ Step 5: Set the session flag cookie (for Next.js Middleware routing)
+      setSessionCookie();
+
+      // Step 6: Hydrate Zustand state
+      setAuthUser(user);
+
+      // ✅ Step 7: Hard redirect — middleware will now see the cookie and allow /chat
+      window.location.href = '/chat';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      console.error('Google Login Error Details:', error);
+      console.error('Google Login Error:', error);
 
-      if (error.code === 'auth/popup-closed-by-user') {
-        toast.error('Login cancelled: Popup was closed.');
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        toast.error('Only one popup can be opened at a time.');
-      } else if (error.code === 'auth/network-request-failed') {
-        toast.error('Network error. Check your internet connection.');
-      } else {
-        const errorMessage =
-          error?.response?.data?.message ||
-          error.message ||
-          'Failed to login. Please try again.';
-        toast.error(errorMessage);
-      }
+      const firebaseErrors: Record<string, string> = {
+        'auth/popup-closed-by-user': 'Login cancelled: Popup was closed.',
+        'auth/cancelled-popup-request': 'Only one popup can be open at a time.',
+        'auth/network-request-failed': 'Network error. Check your connection.',
+      };
+
+      const message =
+        firebaseErrors[error.code] ||
+        error?.response?.data?.message ||
+        error.message ||
+        'Failed to login. Please try again.';
+
+      toast.error(message);
     } finally {
       setIsAuthenticating(false);
     }
@@ -79,7 +88,7 @@ export default function GoogleLoginButton() {
         </>
       ) : (
         <>
-          <svg className="h-5 w-5" viewBox="0 0 24 24">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
             <path
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
               fill="#4285F4"

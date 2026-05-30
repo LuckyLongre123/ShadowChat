@@ -1,108 +1,74 @@
 import { api } from '@/lib/axios';
-import Cookies from 'js-cookie';
-import toast from 'react-hot-toast';
 import { StateCreator } from 'zustand';
-import { StoreType } from '..';
 
-export interface User {
+export interface AuthUser {
   id: string;
-  email?: string;
-  phone?: string;
   name: string;
+  email: string;
   avatar?: string;
+  phone?: string;
 }
 
 export interface AuthSlice {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  setLoading: (status: boolean) => void;
-  setAuthUser: (user: User) => void;
-  logout: () => Promise<unknown>;
+  authUser: AuthUser | null;
+  isAuthLoading: boolean;
+  setAuthUser: (user: AuthUser | null) => void;
   checkAuth: () => Promise<void>;
+  logout: () => void;
 }
 
-const createAuthSlice: StateCreator<StoreType, [], [], AuthSlice> = (
-  set,
-  get
-) => ({
-  user: null,
-  isAuthenticated: false,
-  isLoading: false,
+export const createAuthSlice: StateCreator<AuthSlice> = (set) => ({
+  authUser: null,
+  isAuthLoading: true, // ✅ Start as TRUE — prevents flash of login page on reload
 
-  setAuthUser: (user) => set({ user, isAuthenticated: true, isLoading: false }),
-  setLoading: (status) => set({ isLoading: status }),
-  logout: async () => {
-    try {
-      set({ isLoading: true });
+  setAuthUser: (user) => set({ authUser: user }),
 
-      if (typeof window !== 'undefined') localStorage.removeItem('accessToken');
-      Cookies.remove('accessToken', { path: '/' });
-
-      await api.post('/auth/logout');
-      window.location.href = '/';
-    } catch (error: unknown) {
-      console.error('Backend logout failed (Server might be down):', error);
-      const isNetworkError =
-        typeof error === 'object' &&
-        error !== null &&
-        'response' in error === false;
-      if (isNetworkError) {
-        Cookies.remove('accessToken', { path: '/' });
-        window.location.href = '/server-down';
+  checkAuth: async () => {
+    // ✅ If no token exists at all, fail fast — don't even hit the network
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        set({ authUser: null, isAuthLoading: false });
         return;
       }
-      window.location.href = '/';
-    } finally {
-      set({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        chats: [],
-        hasChatsLoaded: false,
-        activeChatId: null,
-      });
+    }
+
+    try {
+      const res = await api.get('/auth/me');
+      const user = res.data?.data?.user ?? res.data?.data ?? null;
+      set({ authUser: user, isAuthLoading: false });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      // ✅ ONLY clear token on explicit 401 (invalid/expired token)
+      // Do NOT clear on network errors (500, timeout) — that would log out users on Render cold starts
+      if (error?.response?.status === 401) {
+        localStorage.removeItem('accessToken');
+        // ✅ Clear the session flag cookie too
+        document.cookie =
+          'auth-session-flag=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        set({ authUser: null, isAuthLoading: false });
+      } else {
+        // Network error / server error — keep the user "logged in" optimistically
+        // The Axios interceptor will handle true 401s
+        console.warn(
+          '[checkAuth] Non-401 error, preserving session:',
+          error?.message
+        );
+        set({ isAuthLoading: false });
+        // Don't touch authUser — leave it as null but don't wipe a valid token
+      }
     }
   },
-  checkAuth: async () => {
-    try {
-      set({ isLoading: true });
-      const response = await api.get('/auth/me');
 
-      console.log('Backend Response Full Data:', response.data);
-
-      if (response.data?.success) {
-        const userData = response.data.data?.user || response.data.data;
-
-        set({
-          user: userData,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-
-        if (window.location.pathname === '/') {
-          window.location.href = '/chat';
-        }
-      } else {
-        const { logout } = get();
-        await logout();
-      }
-    } catch (error: unknown) {
-      // Existing catch handling logs perfectly...
-      console.error('checkAuth error: ', error);
-      const isNetworkError =
-        typeof error === 'object' && error !== null && !('response' in error);
-
-      if (isNetworkError) {
-        toast.error('Server is currently unreachable. Please try again later.');
-        set({ isLoading: false, isAuthenticated: false });
-        window.location.href = '/server-down';
-        return;
-      }
-      const { logout } = get();
-      await logout();
+  logout: () => {
+    localStorage.removeItem('accessToken');
+    // ✅ Clear the session flag cookie
+    if (typeof window !== 'undefined') {
+      document.cookie =
+        'auth-session-flag=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     }
+    set({ authUser: null, isAuthLoading: false });
+    window.location.href = '/';
   },
 });
-
-export default createAuthSlice;
