@@ -108,7 +108,7 @@ const createAuthSlice: StateCreator<StoreType, [], [], AuthSlice> = (set) => ({
       const status = (error as { response?: { status?: number } })?.response
         ?.status;
 
-      if (status === 401) {
+      if (status === 401 || status === 404) {
         // ✅ Explicitly invalid/expired token — clear everything
         if (typeof window !== 'undefined') {
           localStorage.removeItem('accessToken');
